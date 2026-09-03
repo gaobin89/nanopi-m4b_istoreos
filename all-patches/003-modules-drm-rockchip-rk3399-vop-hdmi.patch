@@ -1,0 +1,37 @@
+--- a/target/linux/rockchip/modules.mk
++++ b/target/linux/rockchip/modules.mk
+@@ -32,6 +32,7 @@
+ 	CONFIG_DRM_DW_HDMI_CEC \
+ 	CONFIG_DRM_DW_HDMI_GP_AUDIO=n \
+ 	CONFIG_PHY_ROCKCHIP_SAMSUNG_HDPTX \
++	CONFIG_PHY_ROCKCHIP_INNO_HDMI=m \
+ 	CONFIG_ROCKCHIP_ANALOGIX_DP=n \
+ 	CONFIG_ROCKCHIP_CDN_DP=n \
+ 	CONFIG_ROCKCHIP_DW_HDMI=y \
+@@ -41,10 +42,13 @@
+ 	CONFIG_ROCKCHIP_LVDS=n \
+ 	CONFIG_ROCKCHIP_RGB=n \
+ 	CONFIG_ROCKCHIP_RK3066_HDMI=n \
+-	CONFIG_ROCKCHIP_VOP=n \
++	CONFIG_ROCKCHIP_VOP=y \
+ 	CONFIG_ROCKCHIP_VOP2=y \
+ 	CONFIG_DRM_PANEL=y \
+-	CONFIG_DRM_PANEL_BRIDGE=y
++	CONFIG_DRM_PANEL_BRIDGE=y \
++	CONFIG_FB=y \
++	CONFIG_FRAMEBUFFER_CONSOLE=y \
++	CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/gpu/drm/bridge/synopsys/dw-hdmi.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/bridge/synopsys/dw-hdmi-qp.ko \
+@@ -52,8 +56,9 @@
+ 	$(LINUX_DIR)/drivers/gpu/drm/bridge/display-connector.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/rockchip/rockchipdrm.ko \
+ 	$(LINUX_DIR)/drivers/phy/rockchip/phy-rockchip-samsung-hdptx.ko \
++	$(LINUX_DIR)/drivers/phy/rockchip/phy-rockchip-inno-hdmi.ko \
+ 	$(LINUX_DIR)/drivers/media/cec/core/cec.ko
+-  AUTOLOAD:=$(call AutoLoad,80,phy-rockchip-samsung-hdptx dw-hdmi-cec rockchipdrm display-connector)
++  AUTOLOAD:=$(call AutoLoad,80,phy-rockchip-samsung-hdptx phy-rockchip-inno-hdmi dw-hdmi-cec rockchipdrm display-connector)
+ endef
+ 
+ define KernelPackage/drm-rockchip/description

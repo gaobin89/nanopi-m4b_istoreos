@@ -1,0 +1,89 @@
+diff --git a/package/firmware/brcmfmac-firmware-43456/Makefile b/package/firmware/brcmfmac-firmware-43456/Makefile
+new file mode 100644
+index 0000000000..fa5086b70b
+--- /dev/null
++++ b/package/firmware/brcmfmac-firmware-43456/Makefile
+@@ -0,0 +1,83 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=brcmfmac-firmware-43456-sdio
++PKG_VERSION:=2024.08.25
++PKG_RELEASE:=1
++
++PKG_MAINTAINER:=NanoPi M4B iStoreOS adaptation
++
++include $(INCLUDE_DIR)/package.mk
++
++# Ampak AP6256 (BCM4345/9, chiprev 9) SDIO FullMAC firmware blobs, pinned to a
++# known-good armbian/firmware commit. The brcmfmac driver (with the 43456
++# CLM-blob modinfo patch already carried by iStoreOS) loads:
++#   brcmfmac43456-sdio.bin               firmware
++#   brcmfmac43456-sdio.clm_blob          CLM (country/locale matrix) blob
++#   brcmfmac43456-sdio.txt               NVRAM (AP6256 board defaults)
++#   brcmfmac43456-sdio.<compatible>.{bin,txt}  board-specific variants (symlinked below)
++ARMBIAN_FW_COMMIT:=f50a2a21bcdb77a562b3976930c5c6b521a1df08
++ARMBIAN_FW_URL:=https://raw.githubusercontent.com/armbian/firmware/$(ARMBIAN_FW_COMMIT)/brcm
++
++define Download/brcmfmac43456-sdio-bin
++  URL:=$(ARMBIAN_FW_URL)
++  FILE:=brcmfmac43456-sdio.bin
++  URL_FILE:=brcmfmac43456-sdio.bin
++  HASH:=3167956a7b2cffc4cfcaf6a282b95728c529eebef18a5d9e6d9ff32de32cc67c
++endef
++$(eval $(call Download,brcmfmac43456-sdio-bin))
++
++define Download/brcmfmac43456-sdio-txt
++  URL:=$(ARMBIAN_FW_URL)
++  FILE:=brcmfmac43456-sdio.txt
++  URL_FILE:=brcmfmac43456-sdio.txt
++  HASH:=66c71eb53b47c49d42386b66735134578640b0946f3f46e44f384fef5aacfd9e
++endef
++$(eval $(call Download,brcmfmac43456-sdio-txt))
++
++define Download/brcmfmac43456-sdio-clm
++  URL:=$(ARMBIAN_FW_URL)
++  FILE:=brcmfmac43456-sdio.clm_blob
++  URL_FILE:=brcmfmac43456-sdio.clm_blob
++  HASH:=2dbd7d22fc9af0eb560ceab45b19646d211bc7b34a1dd00c6bfac5dd6ba25e8a
++endef
++$(eval $(call Download,brcmfmac43456-sdio-clm))
++
++define Package/brcmfmac-firmware-43456-sdio
++  SECTION:=firmware
++  CATEGORY:=Firmware
++  TITLE:=Broadcom BCM43456 SDIO FullMAC firmware (Ampak AP6256)
++  DEPENDS:=+kmod-brcmfmac
++endef
++
++define Package/brcmfmac-firmware-43456-sdio/description
++  brcmfmac firmware for the Broadcom BCM4345/9 (chiprev 9) SDIO FullMAC radio
++  used by the Ampak AP6256 module on the FriendlyARM NanoPi M4B.
++  Provides the .bin firmware, the .clm_blob CLM blob and the AP6256 NVRAM.
++endef
++
++define Build/Compile
++	true
++endef
++
++define Package/brcmfmac-firmware-43456-sdio/install
++	$(INSTALL_DIR) $(1)/lib/firmware/brcm
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.bin \
++		$(1)/lib/firmware/brcm/
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.clm_blob \
++		$(1)/lib/firmware/brcm/
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.txt \
++		$(1)/lib/firmware/brcm/
++	$(LN) \
++		brcmfmac43456-sdio.txt \
++		$(1)/lib/firmware/brcm/brcmfmac43456-sdio.friendlyarm,nanopi-m4b.txt
++	$(LN) \
++		brcmfmac43456-sdio.bin \
++		$(1)/lib/firmware/brcm/brcmfmac43456-sdio.friendlyarm,nanopi-m4b.bin
++endef
++
++$(eval $(call BuildPackage,brcmfmac-firmware-43456-sdio))

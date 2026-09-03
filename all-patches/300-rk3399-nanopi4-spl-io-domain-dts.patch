@@ -1,0 +1,30 @@
+--- a/arch/arm/dts/rk3399-nanopi4-u-boot.dtsi
++++ b/arch/arm/dts/rk3399-nanopi4-u-boot.dtsi
+@@ -6,6 +6,14 @@
+ #include "rk3399-u-boot.dtsi"
+ 
+ &gpio0 {
++	bootph-pre-ram;
++};
++
++&i2c0_xfer {
++	bootph-pre-ram;
++};
++
++&io_domains {
+ 	bootph-pre-ram;
+ };
+ 
+@@ -19,8 +27,12 @@
+ 
+ &vcc3v0_sd {
+ 	bootph-pre-ram;
++	/delete-property/ regulator-always-on;
+ };
+ 
+ &vcc_sdio {
++	bootph-pre-ram;
++	/delete-property/ regulator-always-on;
++	/delete-property/ regulator-boot-on;
+ 	regulator-init-microvolt = <3000000>;
+ };

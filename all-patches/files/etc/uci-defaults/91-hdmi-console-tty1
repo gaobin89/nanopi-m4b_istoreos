@@ -1,0 +1,15 @@
+#!/bin/sh
+# NanoPi M4B: spawn a login prompt on the HDMI framebuffer console (tty1).
+# Requires the kernel fbcon + DRM patches (kmod-drm-rockchip for RK3399)
+# and console=tty0 in the kernel command line (default.bootscript patch).
+#
+# NOTE: do NOT use /sbin/getty here - this iStoreOS build's busybox does not
+# ship the getty applet, so procd would endlessly respawn a missing binary
+# and flood the log with "Failed to execute /sbin/getty". The standard
+# OpenWrt way is askfirst + login.sh, which only needs busybox login.
+
+if [ -f /etc/inittab ] && ! grep -q "^tty1::" /etc/inittab; then
+	echo "tty1::askfirst:/usr/libexec/login.sh" >> /etc/inittab
+fi
+
+exit 0
