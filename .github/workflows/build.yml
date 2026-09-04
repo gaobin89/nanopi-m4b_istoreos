@@ -4,6 +4,8 @@ name: Build iStoreOS 24.10 (NanoPi M4B)
 # 产物：构建出的 M4B 镜像重命名为「yyyy-mm-dd_原镜像名」后，固定发布到 tag「iStoreOS-24.10」。
 #       （Git tag 名不能含空格，故 tag 用 iStoreOS-24.10；发布标题显示为 “iStoreOS 24.10”。）
 #       增量发布：每次手动构建把新镜像追加到同一 Release，不删除/覆盖历史发布。
+# 补丁布局：本仓库（gaobin89/nanopi-m4b_istoreos）根目录含 all-patches/ 子目录。
+#       脚本把该目录移入 iStoreOS 克隆目录后，apply.sh/build.sh 通过 $0 自定位，无需额外 env 变量。
 # 注意：本仓库所有补丁/脚本由 AI 生成，作者仅为分享，不保证及时修复；
 #       如遇编译失败，请参考 README「如何反馈问题」交由 AI 处理或自行 fork 修改。
 on:
@@ -33,26 +35,10 @@ jobs:
       RELEASE_TAG: iStoreOS-24.10      # Git tag（不可含空格）；固定 tag，增量发布不覆盖历史
       RELEASE_NAME: iStoreOS 24.10     # Release 标题（可含空格，用户在 Releases 页看到）
     steps:
-      - name: Checkout 本仓库（补丁与脚本）
+      - name: Checkout 本仓库（补丁与脚本，根目录含 all-patches/）
         uses: actions/checkout@v4
         with:
-          path: all-patches
-
-      - name: 定位补丁目录（兼容仓库目录嵌套）
-        run: |
-          WS="$GITHUB_WORKSPACE"
-          # 兼容两种仓库布局（取决于本仓库根目录是 all-patches 内容，还是上层目录含 all-patches/ 子目录）：
-          #   A) 仓库根即 all-patches 内容        -> $WS/all-patches/apply.sh
-          #   B) 仓库根为上层目录、含 all-patches/ -> $WS/all-patches/all-patches/apply.sh
-          for d in "$WS/all-patches" "$WS/all-patches/all-patches"; do
-            if [ -f "$d/apply.sh" ]; then
-              echo "PATCHES_DIR=$d" >> "$GITHUB_ENV"
-              echo "找到补丁目录: $d"
-              break
-            fi
-          done
-          test -n "${PATCHES_DIR:-}" || { \
-            echo "!! 找不到 apply.sh，请检查仓库目录结构（应为 $WS/all-patches/ 或 $WS/all-patches/all-patches/）"; exit 1; }
+          path: patches
 
       - name: 清理磁盘空间（给 OpenWrt/iStoreOS 构建腾地方）
         run: |
@@ -79,6 +65,16 @@ jobs:
           git clone "${{ inputs.istoreos_repo }}" -b "${{ inputs.istoreos_ref }}" istoreos
           cd istoreos && git rev-parse HEAD
 
+      - name: 将 all-patches 移入 iStoreOS 克隆目录
+        run: |
+          # 本仓库根目录含 all-patches/ 子目录；移入 istoreos/ 后，
+          # `bash all-patches/apply.sh` 会通过 $0 自动定位到 istoreos/all-patches，
+          # 同时 apply.sh 内的 `git clean -e all-patches` 也会保护它不被清理。
+          mv "$GITHUB_WORKSPACE/patches/all-patches" "$GITHUB_WORKSPACE/istoreos/all-patches"
+          test -f "$GITHUB_WORKSPACE/istoreos/all-patches/apply.sh" \
+            || { echo "!! 未找到 all-patches/apply.sh，请检查仓库结构（应为仓库根目录下的 all-patches/）"; exit 1; }
+          echo "已就位: $GITHUB_WORKSPACE/istoreos/all-patches"
+
       - name: 缓存 dl/ 下载目录（加速后续构建）
         uses: actions/cache@v4
         with:
@@ -88,7 +84,7 @@ jobs:
       - name: 套用补丁（apply.sh）
         run: |
           cd istoreos
-          bash "$PATCHES_DIR/apply.sh" "$(pwd)"
+          bash all-patches/apply.sh "$(pwd)"
 
       - name: 校验关键补丁是否生效
         run: |
@@ -116,7 +112,7 @@ jobs:
       - name: 编译（build.sh，干净 PATH）
         run: |
           cd istoreos
-          bash "$PATCHES_DIR/build.sh" -j"$(nproc)"
+          bash all-patches/build.sh -j"$(nproc)"
 
       - name: 收集镜像并重命名（加 yyyy-mm-dd 前缀）
         id: collect
