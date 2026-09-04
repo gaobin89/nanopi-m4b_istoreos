@@ -9,7 +9,7 @@
 ## ⚠️ 生成方式声明（AI-Generated）
 
 > **本仓库内的全部内容均由 AI 在对话中自动生成，未经人工逐行审阅内核 / 构建系统源码。**
-> 包括但不限于：9 个补丁文件（001–005、300–303）、`apply.sh`、`build.sh`、两个 `files/` 覆盖层、
+> 包括但不限于：10 个补丁文件（001–005、300–303、880-01）、`apply.sh`、`build.sh`、两个 `files/` 覆盖层、
 > `.config` / `feeds.conf.default`，以及这份 README 本身。
 >
 > 其中 `.config` 与 `feeds.conf.default` 是基于 **iStoreOS 官方 NanoPi R4SE 固件**
@@ -57,6 +57,7 @@ all-patches/
 ├── 301-rockchip-io-domain-spl-kconfig.patch     # U-Boot SPL IO-domain（Kconfig）
 ├── 302-rk8xx-regulator-spl.patch               # U-Boot SPL rk8xx 稳压器
 ├── 303-nanopi-m4b-spl-io-domain-defconfig.patch  # U-Boot SPL defconfig 使能
+├── 880-01-istoreos-6.12-brcmfmac-fix-ap-mode-station-signal.patch  # brcmfmac AP 模式 station signal 修复
 ├── files/
 │   ├── etc/uci-defaults/91-hdmi-console-tty1   # HDMI 屏 tty1 登录控制台
 │   └── etc/modprobe.d/brcmfmac.conf            # brcmfmac 稳定性修复
@@ -93,6 +94,21 @@ all-patches/
 | `302-rk8xx-regulator-spl.patch` | `drivers/power/regulator/rk8xx.c` |
 | `303-nanopi-m4b-spl-io-domain-defconfig.patch` | `configs/nanopi-m4b-rk3399_defconfig` |
 
+### mac80211 backports 6.12.96 补丁（`cp` 到 `package/kernel/mac80211/patches/brcm/`，由 `apply.sh` [5/6] 套用）
+
+OpenWrt 在构建 `kmod-mac80211` 时会解压 backports-6.12.96 源码，并按字母序合并
+`patches/brcm/` 下所有 `*.patch`，对 `drivers/net/wireless/broadcom/brcm80211/brcmfmac/` 打补丁。
+本目录借用 8xx 编号空间（870-871 是 RPi 维护者的现有系列），不与上游冲突。
+
+| 文件 | 作用目标 | 内容 |
+|------|----------|------|
+| `880-01-istoreos-6.12-brcmfmac-fix-ap-mode-station-signal.patch` | `cfg80211.c` 中 `brcmf_cfg80211_get_station()` | 修复 AP 模式 LuCI 关联站点列表"--- dBm"无信号问题 |
+
+**880-01 修复内容**：原函数 RSSI 兜底分支被 `BRCMF_VIF_STATUS_CONNECTED` 闸住（仅 STA 模式置位），
+AP 模式 `sta_info.rssi[]` 全 0 时直接掉进兜底空跑，导致 `NL80211_STA_INFO_SIGNAL` 永远不报。
+补丁放行 `brcmf_is_apmode()`、并在 AP 路径预填 `scb_val.ea` 给固件（`BRCMF_C_GET_RSSI` 在 AP 模式需 peer MAC）。
+STA 模式行为完全不变（`brcmf_is_apmode()` 为 false，`ea` 留 0）。
+
 ### `files/` 覆盖层（构建期并入 rootfs，由 `apply.sh` [6/6] 复制）
 
 - `etc/uci-defaults/91-hdmi-console-tty1`：首启向 `/etc/inittab` 追加 `tty1::askfirst:/usr/libexec/login.sh`，
@@ -106,7 +122,7 @@ all-patches/
 ### 脚本
 
 - `apply.sh`：在 iStoreOS 源码根目录运行，**六步**完成适配——净化 PATH、重置源码、git apply 001–005、
-  内联注入 HDMI config、SPL 补丁落盘、复制 `files/` + 配置，并做全套校验。
+  内联注入 HDMI config、SPL + mac80211 backports 补丁落盘、复制 `files/` + 配置，并做全套校验。
 - `build.sh`：编译包装器，清理 PATH（去掉 WSL 挂载的 Windows 路径）后透传任意 `make` 参数。
 
 ---
@@ -170,11 +186,12 @@ OpenWrt 会把它拼进 U-Boot 子 `make` 的 `PATH=...`，空格被转成冒号
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| 补丁 `git apply` / `--check` | ✅ 已静态验证 | 在干净 HEAD `fb971407ff` 上 001–005 + 300–303 均通过 |
+| 补丁 `git apply` / `--check` | ✅ 已静态验证 | 在干净 HEAD `fb971407ff` 上 001–005 + 300–303 均通过；880-01 在 backports-6.12.96 `cfg80211.c` 上 `patch -p1` 验证通过 |
 | WiFi 功能 | ✅ 运行期验证（用户提供 dmesg） | 固件加载成功、AP 接口 `phy0-ap0` 起来并桥接进 `br-lan` |
 | brcmfmac 崩溃修复 | ✅ 运行期验证 | 该次启动 dmesg 无 `brcmf_fw_crashed`，旧崩溃循环已消除 |
 | 端到端编译 | ⏳ 待人工验证 | AI 无法编译，请使用者按上文步骤实编 |
 | HDMI 显示 | ✅ 运行期验证（烧录后） | 用户实测 HDMI 显示正常（tty1 控制台 + 帧缓冲输出） |
+| AP 模式关联站点信号 | 🛠️ 补丁已就位、待运行期验证 | 880-01 让 brcmfmac 在 AP 模式上报 `NL80211_STA_INFO_SIGNAL`；之前 `iw dev phy0-ap0 station dump` 无 `signal` 字段、LuCI 显示 `--- dBm`，新固件应能拿到 dBm 值 |
 | eMMC 烧录 | ⏳ 未验证 | 仅在 SDCard 上验证过，eMMC 未验证（见“已知问题”） |
 | 蓝牙 | ❌ 不支持 | 见“已知问题” |
 

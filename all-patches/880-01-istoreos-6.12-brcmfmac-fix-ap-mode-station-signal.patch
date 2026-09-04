@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Message-Id: <20260904-istoreos-brcmfmac-ap-station-signal-fix@local>
+From: istoreos-nanopi-m4b <local@local>
+Date: Fri, 4 Sep 2026 12:00:00 +0800
+Subject: [PATCH] brcmfmac: report station signal in AP/Master mode
+
+In brcmf_cfg80211_get_station() the per-station RSSI is filled from
+sta_info_le.rssi[] first; if those entries are all zero (which is what
+the firmware returns in AP/Master mode for BCM43456 and similar
+chips), the function falls through to a fallback that issues
+BRCMF_C_GET_RSSI to read the connected peer's signal.
+
+That fallback is gated by BRCMF_VIF_STATUS_CONNECTED, which is only
+set when the local interface is operating as a STA and is associated
+to an AP.  In AP/Master mode (hostapd) this bit is never set, so the
+fallback never runs and NL80211_STA_INFO_SIGNAL is never reported.
+
+A second issue: BRCMF_C_GET_RSSI in AP mode requires the peer MAC in
+scb_val.ea, otherwise the firmware returns 0.
+
+The visible effect on NanoPi-M4B with the BCM43456 (AP6256) running
+iStoreOS-24.10 is that the LuCI "Associated Stations" view shows
+"--- dBm" for every connected client, even though the link is healthy.
+
+Fix:
+  * allow the BRCMF_C_GET_RSSI fallback to also run in AP/Master
+    mode, gated by brcmf_is_apmode(ifp->vif);
+  * populate scb_val.ea with the requested station's MAC in the AP
+    path so the firmware returns the right peer's RSSI.
+
+The STA path is unchanged in behavior: in STA mode, scb_val.ea stays
+zero (the firmware ignores it and returns the connected AP's RSSI),
+and the new OR condition is a no-op because brcmf_is_apmode() is
+false there.
+
+Signed-off-by: istoreos-nanopi-m4b <local@local>
+---
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 14 ++++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -3211,11 +3211,21 @@ brcmf_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
+ 			sinfo->signal = total_rssi / count_rssi;
+ 			sinfo->signal_avg = total_rssi_avg / count_rssi;
+ 		} else if (test_bit(BRCMF_VIF_STATUS_CONNECTED,
+-			&ifp->vif->sme_state)) {
+-			memset(&scb_val, 0, sizeof(scb_val));
++				    &ifp->vif->sme_state) ||
++			   brcmf_is_apmode(ifp->vif)) {
++			memset(&scb_val, 0, sizeof(scb_val));
++			/* In AP/Master mode, BRCMF_C_GET_RSSI requires the
++			 * peer MAC in scb_val.ea; without it, the firmware
++			 * returns 0 and the signal stays unfilled.  In STA
++			 * mode the firmware returns the connected AP's RSSI
++			 * regardless of ea, so leaving ea zero is harmless
++			 * there and we only set it in the AP path.
++			 */
++			if (brcmf_is_apmode(ifp->vif))
++				memcpy(scb_val.ea, mac, ETH_ALEN);
+ 			err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_RSSI,
+ 						     &scb_val, sizeof(scb_val));
+ 			if (err) {
+ 				bphy_err(drvr, "Could not get rssi (%d)\n",
+ 					 err);
+ 				goto done;
+-- 
+2.34.1

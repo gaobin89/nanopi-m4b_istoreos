@@ -150,7 +150,7 @@ else:
     print("  ok（brcmfmac 由 mac80211 backports 提供，内核 kconfig 保持上游原样）")
 PY
 
-# ---- 4) 补丁落盘：U-Boot(300-303) ----
+# ---- 4) 补丁落盘：U-Boot(300-303) + mac80211 backports brcmfmac(880) ----
 echo "==> [5/6] cp 300-303 -> package/boot/uboot-rockchip/patches/"
 mkdir -p package/boot/uboot-rockchip/patches
 cp "$PATCHES"/300-rk3399-nanopi4-spl-io-domain-dts.patch \
@@ -159,6 +159,13 @@ cp "$PATCHES"/300-rk3399-nanopi4-spl-io-domain-dts.patch \
    "$PATCHES"/303-nanopi-m4b-spl-io-domain-defconfig.patch \
    package/boot/uboot-rockchip/patches/
 echo "  已复制 300-303"
+
+# 880 系列是 mac80211 backports 6.12.96 展开后，对 brcmfmac 驱动源码的额外补丁
+# （OpenWrt 在 backports 阶段会按字母序合并 patches/brcm/ 下所有 *.patch 一起打）
+echo "==> [5/6] cp 880-* -> package/kernel/mac80211/patches/brcm/"
+mkdir -p package/kernel/mac80211/patches/brcm
+cp "$PATCHES"/880-*.patch package/kernel/mac80211/patches/brcm/
+echo "  已复制 880-*（brcmfmac AP 模式 station signal 修复）"
 
 # ---- 5) files/ 覆盖层 + feeds.conf + .config ----
 echo "==> [6/6] cp files/ 覆盖层 + feeds.conf.default + .config"
@@ -179,6 +186,7 @@ cp "$PATCHES/.config" .config
 echo "==> 校验"
 grep -nE "CONFIG_PHY_ROCKCHIP_INNO_HDMI=|CONFIG_DRM_ROCKCHIP=|CONFIG_ROCKCHIP_VOP=" target/linux/rockchip/armv8/config-6.6
 ls package/boot/uboot-rockchip/patches/ | grep -E "30[0-3]" && echo "  300-303 ok"
+ls package/kernel/mac80211/patches/brcm/ | grep -E "^880-" && echo "  880-* ok（brcmfmac AP 模式 station signal 修复）"
 grep -q "DEVICE_friendlyarm_nanopi-m4b=y" .config && echo "  M4B 设备已选 ok" || echo "  !! .config 未选 M4B 设备"
 test -f files/etc/uci-defaults/91-hdmi-console-tty1 && echo "  files/ 覆盖层(91-hdmi-console-tty1) 已就位 ok" || echo "  !! files/ 覆盖层缺失（91-hdmi-console-tty1 未复制）"
 test -f files/etc/modprobe.d/brcmfmac.conf && echo "  files/ 覆盖层(brcmfmac.conf) 已就位 ok" || echo "  !! files/ 覆盖层缺失（brcmfmac.conf 未复制）"
