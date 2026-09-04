@@ -38,6 +38,22 @@ jobs:
         with:
           path: all-patches
 
+      - name: 定位补丁目录（兼容仓库目录嵌套）
+        run: |
+          WS="$GITHUB_WORKSPACE"
+          # 兼容两种仓库布局（取决于本仓库根目录是 all-patches 内容，还是上层目录含 all-patches/ 子目录）：
+          #   A) 仓库根即 all-patches 内容        -> $WS/all-patches/apply.sh
+          #   B) 仓库根为上层目录、含 all-patches/ -> $WS/all-patches/all-patches/apply.sh
+          for d in "$WS/all-patches" "$WS/all-patches/all-patches"; do
+            if [ -f "$d/apply.sh" ]; then
+              echo "PATCHES_DIR=$d" >> "$GITHUB_ENV"
+              echo "找到补丁目录: $d"
+              break
+            fi
+          done
+          test -n "${PATCHES_DIR:-}" || { \
+            echo "!! 找不到 apply.sh，请检查仓库目录结构（应为 $WS/all-patches/ 或 $WS/all-patches/all-patches/）"; exit 1; }
+
       - name: 清理磁盘空间（给 OpenWrt/iStoreOS 构建腾地方）
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
@@ -72,7 +88,7 @@ jobs:
       - name: 套用补丁（apply.sh）
         run: |
           cd istoreos
-          bash ../all-patches/apply.sh "$(pwd)"
+          bash "$PATCHES_DIR/apply.sh" "$(pwd)"
 
       - name: 校验关键补丁是否生效
         run: |
@@ -100,7 +116,7 @@ jobs:
       - name: 编译（build.sh，干净 PATH）
         run: |
           cd istoreos
-          bash ../all-patches/build.sh -j"$(nproc)"
+          bash "$PATCHES_DIR/build.sh" -j"$(nproc)"
 
       - name: 收集镜像并重命名（加 yyyy-mm-dd 前缀）
         id: collect
