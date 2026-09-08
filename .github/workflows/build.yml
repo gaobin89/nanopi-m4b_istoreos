@@ -19,6 +19,14 @@ on:
         description: 'iStoreOS 24.10 分支/标签（补丁基于 istoreos-24.10 验证）'
         required: true
         default: 'istoreos-24.10'
+      build_threads:
+        description: '编译线程数：multi = make -j$(nproc) V=s（快）；single = make -j1 V=s（慢，但报错清晰，便于排查 package/install 等依赖冲突）'
+        required: true
+        default: 'multi'
+        type: choice
+        options:
+          - multi
+          - single
 
 permissions:
   contents: write   # 需要创建/删除 Release 与 tag
@@ -143,7 +151,13 @@ jobs:
       - name: 编译（build.sh，干净 PATH）
         run: |
           cd istoreos
-          bash all-patches/build.sh -j"$(nproc)"
+          # build_threads=multi -> make -j$(nproc) V=s（快）；single -> make -j1 V=s（慢但报错清晰）
+          # 始终带 V=s，否则 make 自身的报错会被静默，package/install 失败时将无法定位具体包。
+          if [ "${{ inputs.build_threads }}" = "single" ]; then
+            bash all-patches/build.sh -j1 V=s
+          else
+            bash all-patches/build.sh -j"$(nproc)" V=s
+          fi
 
       - name: 收集镜像并重命名（加 yyyy-mm-dd 前缀）
         id: collect
