@@ -118,12 +118,18 @@ jobs:
             || { echo "!! brcmfmac.conf 覆盖层缺失"; fail=1; }
           exit $fail
 
-      - name: 更新并安装 feeds + defconfig
+      - name: 更新并安装 feeds（不跑 make defconfig，避免可选包被重置为 n）
         run: |
           cd istoreos
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          make defconfig
+          # 说明：本地编译直接用 make（oldconfig）展开 31k 种子配置即可保住全部显式 =y 包，产出 157M 镜像。
+          # 之前多跑的 make defconfig 会把 seed 里 docker/bash/htop/luci/iperf3/parted/smartmontools/ttyd
+          # 等 69 个“非默认”显式 =y 包（及其依赖链）判为可丢弃并重置为 n（其依赖 libopenssl/curl/内核
+          # NAMESPACES 等其实均满足），导致镜像缩水到 54M。故去掉 make defconfig，
+          # 交给 build.sh 的 make 走 oldconfig，与本地流程完全一致。
+          # wpad 冲突无需 defconfig 化解：seed 已显式选 wpad-openssl 且未选 wpad-basic-mbedtls
+          # （已验证两端展开配置均为 wpad-openssl=y / wpad-basic-mbedtls=not set）。
 
       - name: 配置 ccache（目录指向 istoreos/.ccache，上限 6G）
         run: |
