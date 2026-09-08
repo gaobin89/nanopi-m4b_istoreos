@@ -149,15 +149,24 @@ jobs:
             base="$(basename "$f")"
             cp "$f" "artifacts/${DATE}_${base}"
           done
+          # 同时收集 manifest（镜像内已装包清单）与展开后的 .config，便于与本地 diff 验证包集合是否一致
+          for m in istoreos/bin/targets/rockchip/armv8/*.manifest; do
+            cp "$m" "artifacts/${DATE}_$(basename "$m")"
+          done
+          cp istoreos/.config "artifacts/${DATE}_expanded.config"
           shopt -u nullglob
           ls -lh artifacts
+          echo "=== 镜像内包数量（manifest 行数）==="
+          wc -l istoreos/bin/targets/rockchip/armv8/*.manifest
           test "$(ls -A artifacts 2>/dev/null)" \
             || { echo "!! 未找到镜像，编译可能失败"; exit 1; }
 
       - name: 创建 Release（固定 tag，若不存在则新建）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          cd patches   # 切到本仓库 checkout（含 .git + origin remote），避免 gh 在非 git 目录调用 git 失败
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG 已存在，将增量追加新镜像（不覆盖历史）"
           else
@@ -171,6 +180,9 @@ jobs:
       - name: 增量上传镜像到固定 tag（按日期前缀累加）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          cd patches   # 切到本仓库 checkout，提供 git 上下文供 gh 使用
+          shopt -s nullglob
           # 不同日期的镜像文件名互不相同，会逐次累加；同一天重复运行用 --clobber 仅刷新当天镜像。
-          gh release upload "$RELEASE_TAG" artifacts/* --clobber
+          gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/artifacts/"* --clobber
