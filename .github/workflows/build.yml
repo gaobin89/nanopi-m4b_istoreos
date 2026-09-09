@@ -90,8 +90,12 @@ jobs:
         with:
           # 实测 feeds/ 约 367M；缓存后 ./scripts/feeds update 只需 git pull 增量，
           # 而非全量 clone。key 绑定 feeds.conf.default，源清单变了自动失效。
+          # 注意：v1 缓存曾携带陈旧 feeds/*.index，导致 feeds install 阶段扫描把
+          # base-files 对 attr、opkg 对 curl 等硬依赖误判为“不存在”并丢出依赖图，
+          # 进而 oldconfig 不再自动选这些包，package/install 阶段 opkg 依赖断裂失败。
+          # 故 bump 到 v2 强制重新克隆一份干净的 feeds（索引随克隆重生）。
           path: istoreos/feeds
-          key: feeds-${{ inputs.istoreos_ref }}-${{ hashFiles('patches/all-patches/feeds.conf.default') }}-v1
+          key: feeds-${{ inputs.istoreos_ref }}-${{ hashFiles('patches/all-patches/feeds.conf.default') }}-v2
           restore-keys: |
             feeds-${{ inputs.istoreos_ref }}-
 
@@ -129,7 +133,9 @@ jobs:
       - name: 更新并安装 feeds（不跑 make defconfig，避免可选包被重置为 n）
         run: |
           cd istoreos
-          ./scripts/feeds update -a
+          # -f 强制重新拉取并重新生成 feeds/*.index（即便已处于固定 commit 也强制刷新），
+          # 避免恢复自缓存的陈旧索引导致 feeds install 把基础包硬依赖误判为“不存在”。
+          ./scripts/feeds update -a -f
           ./scripts/feeds install -a
           # 说明：本地编译直接用 make（oldconfig）展开 31k 种子配置即可保住全部显式 =y 包，产出 157M 镜像。
           # 之前多跑的 make defconfig 会把 seed 里 docker/bash/htop/luci/iperf3/parted/smartmontools/ttyd
@@ -158,6 +164,23 @@ jobs:
           else
             bash all-patches/build.sh -j"$(nproc)" V=s
           fi
+
+      - name: 保存展开配置（诊断，失败也执行）
+        if: always()
+        run: |
+          cd istoreos
+          cp .config "$GITHUB_WORKSPACE/expanded_config.txt"
+          echo "=== 关键依赖包在展开配置中的状态（用于排查 package/install 依赖断裂）==="
+          grep -E "^CONFIG_PACKAGE_(attr|curl|libgcrypt|luci-lua-runtime|luci-theme-argon)=" .config \
+            || echo "(未找到，说明仍被 oldconfig 丢弃)"
+
+      - name: 上传诊断配置（始终执行，便于失败复盘）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expanded-config-diag
+          path: expanded_config.txt
+          if-no-files-found: warn
 
       - name: 收集镜像并重命名（加 yyyy-mm-dd 前缀）
         id: collect
