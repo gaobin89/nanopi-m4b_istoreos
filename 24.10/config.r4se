@@ -1,33 +1,34 @@
 CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_MULTI_PROFILE=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_a2=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_ars4=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r1=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r1-lite=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r2=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_fastrhino_r6xs=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_firefly_station-m2=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r2s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r3s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r4s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r4se=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r76s=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h88k=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hlink_h28k=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t68m=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t88m=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_rock-5t=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e20c=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e24c=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e52c=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e54c=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k60pro=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_xunlong_orangepi-5-plus=y
+CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-m4b=y
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_a2 is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_ars4 is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r1 is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r1-lite is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_r2 is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_fastrhino_r6xs is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_firefly_station-m2 is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r2s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r3s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r4s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r4se is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r76s is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h88k is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hlink_h28k is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t68m is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t88m is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_rock-5t is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e20c is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e24c is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e52c is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_radxa_e54c is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k60pro is not set
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_xunlong_orangepi-5-plus is not set
 CONFIG_ALL_KMODS=y
 CONFIG_DEVEL=y
 CONFIG_BUSYBOX_CUSTOM=y
@@ -149,7 +150,9 @@ CONFIG_PACKAGE_external-protocol=y
 CONFIG_PACKAGE_fdisk=y
 CONFIG_PACKAGE_glib2=y
 CONFIG_PACKAGE_gre=y
-CONFIG_PACKAGE_hostapd-openssl=y
+# NanoPi M4B WiFi：用单一 wpad-openssl 同时提供 AP(hostapd) 与 Client(wpa_supplicant)，
+# 避免与默认 wpad-basic-mbedtls 在 hostapd/wpa-supplicant 虚拟包上冲突。
+CONFIG_PACKAGE_wpad-openssl=y
 CONFIG_PACKAGE_htop=y
 CONFIG_PACKAGE_ip-full=y
 CONFIG_PACKAGE_ip6tables-nft=y
@@ -202,22 +205,11 @@ CONFIG_PACKAGE_kmod-dax=y
 CONFIG_PACKAGE_kmod-dm=y
 CONFIG_PACKAGE_kmod-dm-raid=y
 CONFIG_PACKAGE_kmod-dnsresolver=y
-CONFIG_PACKAGE_kmod-drm-display-helper=y
-CONFIG_PACKAGE_kmod-drm-dma-helper=y
-CONFIG_PACKAGE_kmod-drm-kms-helper=y
-CONFIG_PACKAGE_kmod-drm-rockchip=y
-CONFIG_PACKAGE_kmod-drm-shmem-helper=y
-CONFIG_PACKAGE_kmod-drm-udl=y
 CONFIG_PACKAGE_kmod-dummy=y
 CONFIG_PACKAGE_kmod-e100=y
 CONFIG_PACKAGE_kmod-e1000=y
 CONFIG_PACKAGE_kmod-e1000e=y
 CONFIG_PACKAGE_kmod-eeprom-at24=y
-CONFIG_PACKAGE_kmod-fb-cfb-copyarea=y
-CONFIG_PACKAGE_kmod-fb-cfb-fillrect=y
-CONFIG_PACKAGE_kmod-fb-cfb-imgblt=y
-CONFIG_PACKAGE_kmod-fb-sys-fops=y
-CONFIG_PACKAGE_kmod-fb-sys-ram=y
 CONFIG_PACKAGE_kmod-fixed-phy=y
 CONFIG_PACKAGE_kmod-fs-autofs4=y
 CONFIG_PACKAGE_kmod-fs-binfmt-misc=y
@@ -811,8 +803,8 @@ CONFIG_PACKAGE_webdav2=y
 CONFIG_PACKAGE_wget-ssl=y
 CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_wpa-cli=y
-CONFIG_PACKAGE_wpa-supplicant-openssl=y
-CONFIG_PACKAGE_wpad-basic-mbedtls=m
+# CONFIG_PACKAGE_wpa-supplicant-openssl is not set
+# CONFIG_PACKAGE_wpad-basic-mbedtls is not set
 CONFIG_PACKAGE_wsdd2=y
 CONFIG_PACKAGE_wwan=y
 CONFIG_PACKAGE_xtables-nft=y
@@ -845,6 +837,7 @@ CONFIG_VERSION_REPO="https://mirrors.cernet.edu.cn/openwrt/releases/%V"
 CONFIG_VERSION_SUPPORT_URL=""
 CONFIG_shadow-all=y
 # CONFIG_PACKAGE_brcmfmac-nvram-4356-sdio is not set
+CONFIG_PACKAGE_brcmfmac-firmware-43456-sdio=y
 # CONFIG_PACKAGE_cypress-firmware-4356-sdio is not set
 CONFIG_PACKAGE_kmod-rtw88-8723ds=m
 CONFIG_PACKAGE_kmod-rtw88-sdio=m
@@ -878,3 +871,21 @@ CONFIG_PACKAGE_kmod-rtw88-sdio=m
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_xunlong_orangepi-r1-plus-lts is not set
 # CONFIG_VERSION_CODE_FILENAMES is not set
 # CONFIG_VERSION_FILENAMES is not set
+
+# === NanoPi M4B (AP6256 / BCM43456) WiFi stack ===
+CONFIG_PACKAGE_kmod-cfg80211=y
+CONFIG_PACKAGE_kmod-mac80211=y
+CONFIG_PACKAGE_kmod-brcmutil=y
+CONFIG_PACKAGE_kmod-brcmfmac=y
+CONFIG_PACKAGE_kmod-rfkill=y
+CONFIG_PACKAGE_wifi-scripts=y
+CONFIG_PACKAGE_iw=y
+CONFIG_PACKAGE_iwinfo=y
+CONFIG_PACKAGE_wireless-regdb=y
+# 以下为基础系统/应用包的硬依赖，须在种子里显式 =y 钉死，避免 GitHub CI 上
+# oldconfig 因 feeds 索引陈旧未自动拉取而缺失（导致 base-files/opkg/ntfsprogs/
+# istoreos-files/luci-app-ota 在 package/install 阶段依赖断裂、构建失败）。
+CONFIG_PACKAGE_attr=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_luci-lua-runtime=y
+CONFIG_PACKAGE_luci-theme-argon=y

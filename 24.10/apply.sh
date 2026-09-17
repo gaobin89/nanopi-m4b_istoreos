@@ -2,7 +2,7 @@
 # NanoPi M4B (RK3399) iStoreOS 适配：一键套用全部补丁与覆盖层
 #
 # 用法：
-#   bash ~/istoreos/all-patches/apply.sh ~/istoreos
+#   bash ~/istoreos/24.10/apply.sh ~/istoreos
 # 或（脚本自动把自身所在目录当作 PATCHES，ISTOREOS 默认 ~/istoreos）：
 #   bash apply.sh
 #
@@ -42,7 +42,7 @@ set -u
 
 IST="${1:-$HOME/istoreos}"
 IST="$(eval echo "$IST")"
-PATCHES="$(cd "$(dirname "$0")" && pwd)"   # 本脚本所在目录 = all-patches
+PATCHES="$(cd "$(dirname "$0")" && pwd)"   # 本脚本所在目录 = 24.10
 
 echo "ISTOREOS = $IST"
 echo "PATCHES  = $PATCHES"
@@ -72,8 +72,8 @@ else
   echo "  -> 未找到 origin/istoreos-24.10 且未配置 upstream，git reset --hard HEAD"
   git reset --hard HEAD
 fi
-# 仅移除验证残留(保留 build_dir/staging_dir/bin/dl/.ccache/feeds/tmp/all-patches)
-git clean -ffdx -e build_dir -e staging_dir -e bin -e dl -e .ccache -e feeds -e tmp -e all-patches
+# 仅移除验证残留(保留 build_dir/staging_dir/bin/dl/.ccache/feeds/tmp/24.10)
+git clean -ffdx -e build_dir -e staging_dir -e bin -e dl -e .ccache -e feeds -e tmp -e 24.10
 # 精确删除受影响编译子目录（其余用户态包与工具链保留，不触发全量重编）
 rm -rf build_dir/target-aarch64_generic_musl/root-rockchip* \
        build_dir/target-aarch64_generic_musl/linux-rockchip_armv8 \
@@ -94,6 +94,18 @@ done
 grep -q "friendlyarm_nanopi-m4b" target/linux/rockchip/image/armv8.mk && echo "  M4B 设备已注入 armv8.mk ok" || echo "  !! armv8.mk 未含 M4B（001 未生效）"
 grep -q "nanopi-m4b-rk3399" package/boot/uboot-rockchip/Makefile && echo "  M4B U-Boot 已注入 Makefile ok" || echo "  !! uboot Makefile 未含 M4B（002 未生效）"
 test -f package/firmware/brcmfmac-firmware-43456/Makefile && echo "  43456 固件包 Makefile 已生成 ok" || echo "  !! 43456 固件包缺失（005 未生效）"
+# 强制刷新固件下载缓存：005 把 .bin 源从 armbian 切到 RPi，但文件名未变，
+# OpenWrt 的 dl/.brcmfmac43456-sdio.bin.ok 戳记按文件名记、不按 hash 复核，旧戳在时
+# 会复用缓存里的旧 .bin 而不重下（HASH 钉死也拦不住，戳记优先级更高）。
+# 清掉 .bin 与其 .ok 戳，强制下次 make 重新下载 RPi 固件源。
+rm -f dl/brcmfmac43456-sdio.bin dl/brcmfmac43456-sdio.txt dl/brcmfmac43456-sdio.clm_blob \
+      dl/.brcmfmac43456-sdio.bin.ok dl/.brcmfmac43456-sdio.txt.ok dl/.brcmfmac43456-sdio.clm_blob.ok 2>/dev/null \
+   && echo "  已清理 dl/ 旧 43456 固件缓存（强制重下 RPi 源）" || true
+# 强制刷新 OpenWrt 包数据库缓存：005 新建的 package/firmware/brcmfmac-firmware-43456
+# 若因 tmp/.packageinfo 比该 Makefile 新而被扫描器跳过，下面这条能让 make 重新扫描并登记，
+# 否则 CONFIG_PACKAGE_brcmfmac-firmware-43456-sdio=y 会被 syncconfig 当未知符号剥掉
+# （build.yml 已删除 make defconfig，不再有“全量重扫”兜底，故此处必须显式清缓存）。
+rm -f tmp/.packageinfo tmp/.packages tmp/.config-package.in 2>/dev/null && echo "  已删除陈旧 tmp/.packageinfo（强制下次 make 重新扫描包）" || true
 
 # ---- 2) 007 inline：config-6.6 显示栈 built-in（HDMI）----
 echo "==> [3/6] 007 inline：config-6.6 显示栈 built-in"
@@ -167,20 +179,21 @@ mkdir -p package/kernel/mac80211/patches/brcm
 cp "$PATCHES"/880-*.patch package/kernel/mac80211/patches/brcm/
 echo "  已复制 880-*（brcmfmac AP 模式 station signal 修复）"
 
-# ---- 5) files/ 覆盖层 + feeds.conf + .config ----
-echo "==> [6/6] cp files/ 覆盖层 + feeds.conf.default + .config"
+# ---- 5) files/ 覆盖层 + feeds.r4se + config.r4se ----
+echo "==> [6/6] cp files/ 覆盖层 + feeds.r4se + config.r4se"
 # files/ 覆盖层（OpenWrt 构建期直接并入 rootfs）：当前含
 #   91-hdmi-console-tty1 —— 首启向 /etc/inittab 追加 tty1 getty，
 #     让 HDMI 屏出现登录控制台（该板内核 cmdline console 默认指向 ttyFIQ0 调试串口）；
-#   etc/modprobe.d/brcmfmac.conf —— 关闭 brcmfmac 的 FWSUP/SAE/DUMP_OBSS 功能
-#     (feature_disable=0x282000) 并禁用固件 roaming 引擎(roamoff=1)，
-#     修复 AP6256(BCM4345/9) 在 AP 模式下固件不定时崩溃、反复 mmc_hw_reset 复位的问题。
+#   etc/modprobe.d/brcmfmac.conf —— feature_disable=0x28A000(roamoff=1) 为崩溃的
+#     【兜底】层修复，关闭 FWSUP(bit13)/SAE(bit19)/DUMP_OBSS(bit21)/MONITOR_FLAG(bit15)。
+#     但真正根因是 armbian 随附的 2017 固件 7.45.96.2 在 AP 模式 "known to crash"，
+#     仅靠关闭功能位无法根除；彻底修复靠 005 补丁把 .bin 换成 RPi 7.84.17.1（见 005 注释）。
 mkdir -p files
 cp -rf "$PATCHES"/files/. files/
-cp "$PATCHES/feeds.conf.default" feeds.conf.default
+cp "$PATCHES/feeds.r4se" feeds.conf.default
 rm -f feeds.conf
 [ -e .config ] && mv -f .config .config.orig
-cp "$PATCHES/.config" .config
+cp "$PATCHES/config.r4se" .config
 
 # ---- 校验 ----
 echo "==> 校验"
@@ -213,8 +226,9 @@ echo
 echo "############################################"
 echo "# 机械套用完成。下面手动执行："
 echo "############################################"
-echo "  ./scripts/feeds update -a && ./scripts/feeds install -a"
-echo "  make defconfig   # 归一化 .config（拉入 M4B DEVICE_PACKAGES；wpad-openssl 为单一提供者，不会重新引入 wpad-basic-mbedtls 冲突）"
+echo "  ./scripts/feeds update -a -f && ./scripts/feeds install -a"
+echo "  # 不要 make defconfig：会把 seed 里大量显式 =y 包重置为 n，导致镜像缩水/依赖断裂；"
+echo "  #   交给 build.sh 的 make 走 oldconfig，与本地流程一致，保住全部显式 =y 包。"
 echo "  # 若之后又改了 .config，可再清一次受影响子目录："
 echo "  rm -rf build_dir/target-aarch64_generic_musl/root-rockchip* build_dir/target-aarch64_generic_musl/linux-rockchip_armv8 build_dir/*uboot-rockchip*"
 echo

@@ -1,0 +1,11 @@
+--- a/target/linux/rockchip/image/default.bootscript
++++ b/target/linux/rockchip/image/default.bootscript
+@@ -16,7 +16,7 @@
+ 	serial_addr=',0xfeb50000'; serial_port='ttyS2';
+ fi
+ 
+-setenv bootargs "console=${serial_port},1500000 earlycon=uart8250,mmio32${serial_addr} root=PARTUUID=${uuid} rw rootwait";
++setenv bootargs "console=tty0 console=${serial_port},1500000 earlycon=uart8250,mmio32${serial_addr} root=PARTUUID=${uuid} rw rootwait";
+ 
+ load ${devtype} ${devnum}:1 ${kernel_addr_r} kernel.img
+ 

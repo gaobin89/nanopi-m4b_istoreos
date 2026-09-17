@@ -1,0 +1,36 @@
+#!/bin/sh
+# /etc/hotplug.d/ieee80211/99-brcmfmac-recover
+#
+# brcmfmac (AP6256 / BCM4345/9, SDIO) 固件偶发崩溃时的自动恢复看门狗。
+#
+# 崩溃现象（dmesg）：
+#   ieee80211 phyX: brcmf_fw_crashed: Firmware has halted or crashed
+#   brcmfmac mmc0:0001:1 ...: bus is down. we have nothing to do.
+# 之后 brcmfmac 触发 mmc_hw_reset 复位 SDIO，radio 以一个新的 phy 索引
+# (phy0 -> phy1 -> phy2 ...) 重新枚举。netifd / hostapd 的 AP 状态仍绑定
+# 在旧的 phy 上，不会自动重建，结果就是：AP 接口消失 / 客户端连不上，
+# 必须人工去 LuCI 重开 WiFi 才能恢复。
+#
+# 本脚本在新 wiphy 出现（ACTION=add）时自动重跑 `wifi up`，让 AP 在新 phy
+# 上重建。操作幂等、开销极低；只在 brcmfmac 重枚举（崩溃后）才会触发，
+# 正常启动 / 常规插拔不会造成异常。
+#
+# 与 files/etc/modprobe.d/brcmfmac.conf（feature_disable 关闭固件崩溃触发位）
+# 配合：前者尽量从根上避免崩溃，本脚本作为兜底，确保万一崩溃也能自愈。
+
+[ "$SUBSYSTEM" = "ieee80211" ] || exit 0
+[ "$ACTION" = "add" ] || exit 0
+[ -n "$DEVICENAME" ] || exit 0
+
+# 仅处理 wiphy 本身（phy0 / phy1 ...），跳过 phyX-ap0 / phyX-sta0 等接口
+case "$DEVICENAME" in
+  phy*)
+    case "$DEVICENAME" in
+      *-*) exit 0 ;;   # 含 '-' 的是派生接口，不是 wiphy，忽略
+    esac
+    # 等 brcmfmac 完成新 phy 的接口创建与 netifd 注册，避免过早操作
+    sleep 3
+    /sbin/wifi up >/dev/null 2>&1
+    logger -t brcmfmac-recover "detected brcmfmac re-probe ($DEVICENAME), re-ran 'wifi up'"
+    ;;
+esac

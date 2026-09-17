@@ -1,0 +1,24 @@
+--- a/package/boot/uboot-rockchip/Makefile
++++ b/package/boot/uboot-rockchip/Makefile
+@@ -128,6 +128,13 @@
+     friendlyarm_nanopc-t4
+ endef
+ 
++define U-Boot/nanopi-m4b-rk3399
++  $(U-Boot/rk3399/Default)
++  NAME:=NanoPi M4B
++  BUILD_DEVICES:= \
++    friendlyarm_nanopi-m4b
++endef
++
+ define U-Boot/nanopi-r4s-rk3399
+   $(U-Boot/rk3399/Default)
+   NAME:=NanoPi R4S
+@@ -462,6 +469,7 @@
+ 
+ UBOOT_TARGETS := \
+   nanopc-t4-rk3399 \
++  nanopi-m4b-rk3399 \
+   nanopi-r4s-rk3399 \
+   nanopi-r4se-rk3399 \
+   rock-4c-plus-rk3399 \

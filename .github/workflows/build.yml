@@ -1,24 +1,28 @@
-name: Build iStoreOS 24.10 (NanoPi M4B)
+name: Build iStoreOS NanoPi M4B
 
-# 触发方式：仅手动触发（Actions 页面 -> Run workflow）
-# 产物：构建出的 M4B 镜像重命名为「yyyy-mm-dd_原镜像名」后，固定发布到 tag「iStoreOS-24.10」。
-#       （Git tag 名不能含空格，故 tag 用 iStoreOS-24.10；发布标题显示为 “iStoreOS 24.10”。）
-#       增量发布：每次手动构建把新镜像追加到同一 Release，不删除/覆盖历史发布。
-# 补丁布局：本仓库（gaobin89/nanopi-m4b_istoreos）根目录含 all-patches/ 子目录。
-#       脚本把该目录移入 iStoreOS 克隆目录后，apply.sh/build.sh 通过 $0 自定位，无需额外 env 变量。
+# 触发方式：仅手动触发（Actions 页面 -> Run workflow），需手动选择 version（24.10 / 25.12）
+# 产物：构建出的 M4B 镜像重命名为「yyyy-mm-dd_原镜像名」后，增量发布到对应固定 tag
+#       （24.10 -> iStoreOS-24.10；25.12 -> iStoreOS-25.12）。
+# 补丁布局：本仓库（<owner>/nanopi-m4b_istoreos）根目录含 24.10/ 与 25.12/ 两个子目录，
+#       分别对应 istoreos-24.10 / istoreos-25.12 的补丁与脚本。用户触发时选择 version，
+#       工作流把对应子目录移入 iStoreOS 克隆目录后，apply.sh/build.sh 通过 $0 自定位。
 # 注意：本仓库所有补丁/脚本由 AI 生成，作者仅为分享，不保证及时修复；
-#       如遇编译失败，请参考 README「如何反馈问题」交由 AI 处理或自行 fork 修改。
+#       如遇编译失败，请参考仓库根目录 README「如何反馈问题」交由 AI 处理或自行 fork 修改。
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'iStoreOS 版本：决定补丁目录(24.10/25.12)、源码分支与产物 tag'
+        required: true
+        default: '25.12'
+        type: choice
+        options:
+          - '24.10'
+          - '25.12'
       istoreos_repo:
         description: 'iStoreOS 源码仓库地址'
         required: true
         default: 'https://github.com/istoreos/istoreos'
-      istoreos_ref:
-        description: 'iStoreOS 24.10 分支/标签（补丁基于 istoreos-24.10 验证）'
-        required: true
-        default: 'istoreos-24.10'
       build_threads:
         description: '编译线程数：multi = make -j$(nproc) V=s（快）；single = make -j1 V=s（慢，但报错清晰，便于排查 package/install 等依赖冲突）'
         required: true
@@ -32,18 +36,33 @@ permissions:
   contents: write   # 需要创建/删除 Release 与 tag
 
 concurrency:
-  group: build-nanopi-m4b
+  group: build-nanopi-m4b-${{ inputs.version }}
   cancel-in-progress: false   # 串行执行，避免同一 tag 并发冲突
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360       # 上限 6 小时；iStoreOS 全量编译可能较久，超时请改用更大/自托管 runner
-    env:
-      RELEASE_TAG: iStoreOS-24.10      # Git tag（不可含空格）；固定 tag，增量发布不覆盖历史
-      RELEASE_NAME: iStoreOS 24.10     # Release 标题（可含空格，用户在 Releases 页看到）
     steps:
-      - name: Checkout 本仓库（补丁与脚本，根目录含 all-patches/）
+      - name: 解析版本参数（分支 / tag / 补丁目录）
+        id: vars
+        run: |
+          case "${{ inputs.version }}" in
+            24.10)
+              echo "istoreos_ref=istoreos-24.10" >> "$GITHUB_OUTPUT"
+              echo "release_tag=iStoreOS-24.10"  >> "$GITHUB_OUTPUT"
+              echo "release_name=iStoreOS 24.10" >> "$GITHUB_OUTPUT"
+              echo "patch_dir=24.10"             >> "$GITHUB_OUTPUT"
+              ;;
+            25.12)
+              echo "istoreos_ref=istoreos-25.12" >> "$GITHUB_OUTPUT"
+              echo "release_tag=iStoreOS-25.12"  >> "$GITHUB_OUTPUT"
+              echo "release_name=iStoreOS 25.12" >> "$GITHUB_OUTPUT"
+              echo "patch_dir=25.12"             >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Checkout 本仓库（补丁与脚本，根目录含 24.10/ 与 25.12/）
         uses: actions/checkout@v4
         with:
           path: patches
@@ -63,7 +82,7 @@ jobs:
 
       - name: 克隆 iStoreOS 源码
         run: |
-          git clone "${{ inputs.istoreos_repo }}" -b "${{ inputs.istoreos_ref }}" istoreos
+          git clone "${{ inputs.istoreos_repo }}" -b "${{ steps.vars.outputs.istoreos_ref }}" istoreos
           cd istoreos && git rev-parse HEAD
 
       - name: 缓存 dl/ 下载目录（保存源码 tarball，省下载时间）
@@ -71,17 +90,16 @@ jobs:
         with:
           # 实测本地 dl/ 约 2.6G（含 go-mod-cache）；与 ccache/feeds 合计仍低于 GitHub 每仓库 10G 缓存上限
           path: istoreos/dl
-          key: dl-${{ inputs.istoreos_ref }}-${{ hashFiles('patches/all-patches/feeds.conf.default') }}-v2
+          key: dl-${{ steps.vars.outputs.istoreos_ref }}-v3
           restore-keys: |
-            dl-${{ inputs.istoreos_ref }}-v2
-            dl-${{ inputs.istoreos_ref }}-
+            dl-${{ steps.vars.outputs.istoreos_ref }}-
 
       - name: 缓存 .ccache/ 编译缓存（命中后热编译大幅加速，近似续跑）
         uses: actions/cache@v4
         with:
-          # 种子 .config 已开 CONFIG_CCACHE=y，此处把编译缓存持久化到 istoreos/.ccache
+          # 种子 config.r4se 已开 CONFIG_CCACHE=y，此处把编译缓存持久化到 istoreos/.ccache
           path: istoreos/.ccache
-          key: ccache-${{ hashFiles('patches/all-patches/.config') }}-v1
+          key: ccache-${{ steps.vars.outputs.istoreos_ref }}-v1
           restore-keys: |
             ccache-
 
@@ -89,30 +107,30 @@ jobs:
         uses: actions/cache@v4
         with:
           # 实测 feeds/ 约 367M；缓存后 ./scripts/feeds update 只需 git pull 增量，
-          # 而非全量 clone。key 绑定 feeds.conf.default，源清单变了自动失效。
+          # 而非全量 clone。key 绑定 istoreos_ref，源清单变了自动失效。
           # 注意：v1 缓存曾携带陈旧 feeds/*.index，导致 feeds install 阶段扫描把
           # base-files 对 attr、opkg 对 curl 等硬依赖误判为“不存在”并丢出依赖图，
           # 进而 oldconfig 不再自动选这些包，package/install 阶段 opkg 依赖断裂失败。
-          # 故 bump 到 v2 强制重新克隆一份干净的 feeds（索引随克隆重生）。
+          # 故 bump 到 v3 强制重新克隆一份干净的 feeds（索引随克隆重生）。
           path: istoreos/feeds
-          key: feeds-${{ inputs.istoreos_ref }}-${{ hashFiles('patches/all-patches/feeds.conf.default') }}-v2
+          key: feeds-${{ steps.vars.outputs.istoreos_ref }}-v3
           restore-keys: |
-            feeds-${{ inputs.istoreos_ref }}-
+            feeds-${{ steps.vars.outputs.istoreos_ref }}-
 
-      - name: 将 all-patches 移入 iStoreOS 克隆目录
+      - name: 将补丁目录移入 iStoreOS 克隆目录
         run: |
-          # 本仓库根目录含 all-patches/ 子目录；移入 istoreos/ 后，
-          # `bash all-patches/apply.sh` 会通过 $0 自动定位到 istoreos/all-patches，
-          # 同时 apply.sh 内的 `git clean -e all-patches` 也会保护它不被清理。
-          mv "$GITHUB_WORKSPACE/patches/all-patches" "$GITHUB_WORKSPACE/istoreos/all-patches"
-          test -f "$GITHUB_WORKSPACE/istoreos/all-patches/apply.sh" \
-            || { echo "!! 未找到 all-patches/apply.sh，请检查仓库结构（应为仓库根目录下的 all-patches/）"; exit 1; }
-          echo "已就位: $GITHUB_WORKSPACE/istoreos/all-patches"
+          # 本仓库根目录含 ${{ steps.vars.outputs.patch_dir }}/ 子目录；移入 istoreos/ 后，
+          # `bash ${{ steps.vars.outputs.patch_dir }}/apply.sh` 会通过 $0 自动定位到 istoreos/${{ steps.vars.outputs.patch_dir }}，
+          # 同时 apply.sh 内的 `git clean -e ${{ steps.vars.outputs.patch_dir }}` 也会保护它不被清理。
+          mv "$GITHUB_WORKSPACE/patches/${{ steps.vars.outputs.patch_dir }}" "$GITHUB_WORKSPACE/istoreos/${{ steps.vars.outputs.patch_dir }}"
+          test -f "$GITHUB_WORKSPACE/istoreos/${{ steps.vars.outputs.patch_dir }}/apply.sh" \
+            || { echo "!! 未找到 ${{ steps.vars.outputs.patch_dir }}/apply.sh，请检查仓库结构（应为仓库根目录下的 ${{ steps.vars.outputs.patch_dir }}/）"; exit 1; }
+          echo "已就位: $GITHUB_WORKSPACE/istoreos/${{ steps.vars.outputs.patch_dir }}"
 
       - name: 套用补丁（apply.sh）
         run: |
           cd istoreos
-          bash all-patches/apply.sh "$(pwd)"
+          bash ${{ steps.vars.outputs.patch_dir }}/apply.sh "$(pwd)"
 
       - name: 校验关键补丁是否生效
         run: |
@@ -124,10 +142,17 @@ jobs:
             || { echo "!! 002 未生效（uboot Makefile 无 M4B 变体）"; fail=1; }
           test -f package/firmware/brcmfmac-firmware-43456/Makefile \
             || { echo "!! 005 未生效（43456 固件包缺失）"; fail=1; }
-          grep -q "DEVICE_friendlyarm_nanopi-m4b=y" .config \
-            || { echo "!! .config 未选中 M4B 设备"; fail=1; }
           test -f files/etc/modprobe.d/brcmfmac.conf \
             || { echo "!! brcmfmac.conf 覆盖层缺失"; fail=1; }
+          test -f package/kernel/mac80211/patches/brcm/880-*.patch \
+            || { echo "!! 880-01 未落盘（brcmfmac AP 模式 station signal 修复缺失）"; fail=1; }
+          if [ "${{ inputs.version }}" = "24.10" ]; then
+            grep -q "DEVICE_friendlyarm_nanopi-m4b=y" .config \
+              || { echo "!! .config 未选中 M4B 设备"; fail=1; }
+          else
+            grep -q "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-m4b=y" .config \
+              || { echo "!! .config 未选中 M4B 设备"; fail=1; }
+          fi
           exit $fail
 
       - name: 更新并安装 feeds（不跑 make defconfig，避免可选包被重置为 n）
@@ -137,13 +162,10 @@ jobs:
           # 避免恢复自缓存的陈旧索引导致 feeds install 把基础包硬依赖误判为“不存在”。
           ./scripts/feeds update -a -f
           ./scripts/feeds install -a
-          # 说明：本地编译直接用 make（oldconfig）展开 31k 种子配置即可保住全部显式 =y 包，产出 157M 镜像。
+          # 说明：本地编译直接用 make（oldconfig）展开种子配置即可保住全部显式 =y 包，产出完整镜像。
           # 之前多跑的 make defconfig 会把 seed 里 docker/bash/htop/luci/iperf3/parted/smartmontools/ttyd
-          # 等 69 个“非默认”显式 =y 包（及其依赖链）判为可丢弃并重置为 n（其依赖 libopenssl/curl/内核
-          # NAMESPACES 等其实均满足），导致镜像缩水到 54M。故去掉 make defconfig，
-          # 交给 build.sh 的 make 走 oldconfig，与本地流程完全一致。
-          # wpad 冲突无需 defconfig 化解：seed 已显式选 wpad-openssl 且未选 wpad-basic-mbedtls
-          # （已验证两端展开配置均为 wpad-openssl=y / wpad-basic-mbedtls=not set）。
+          # 等“非默认”显式 =y 包（及其依赖链）判为可丢弃并重置为 n，导致镜像缩水、依赖断裂。
+          # 故去掉 make defconfig，交给 build.sh 的 make 走 oldconfig，与本地流程完全一致。
 
       - name: 配置 ccache（目录指向 istoreos/.ccache，上限 6G）
         run: |
@@ -160,9 +182,9 @@ jobs:
           # build_threads=multi -> make -j$(nproc) V=s（快）；single -> make -j1 V=s（慢但报错清晰）
           # 始终带 V=s，否则 make 自身的报错会被静默，package/install 失败时将无法定位具体包。
           if [ "${{ inputs.build_threads }}" = "single" ]; then
-            bash all-patches/build.sh -j1 V=s
+            bash ${{ steps.vars.outputs.patch_dir }}/build.sh -j1 V=s
           else
-            bash all-patches/build.sh -j"$(nproc)" V=s
+            bash ${{ steps.vars.outputs.patch_dir }}/build.sh -j"$(nproc)" V=s
           fi
 
       - name: 保存展开配置（诊断，失败也执行）
@@ -173,6 +195,8 @@ jobs:
           echo "=== 关键依赖包在展开配置中的状态（用于排查 package/install 依赖断裂）==="
           grep -E "^CONFIG_PACKAGE_(attr|curl|libgcrypt|luci-lua-runtime|luci-theme-argon)=" .config \
             || echo "(未找到，说明仍被 oldconfig 丢弃)"
+          echo "=== wpad 提供者状态（应为 wpad-openssl=y，其余冲突包 not set）==="
+          grep -E "^CONFIG_PACKAGE_(wpad-openssl|wpad-basic-mbedtls|hostapd-openssl)=" .config || true
 
       - name: 上传诊断配置（始终执行，便于失败复盘）
         if: always()
@@ -208,15 +232,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.vars.outputs.release_tag }}
+          RELEASE_NAME: ${{ steps.vars.outputs.release_name }}
         run: |
           cd patches   # 切到本仓库 checkout（含 .git + origin remote），避免 gh 在非 git 目录调用 git 失败
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG 已存在，将增量追加新镜像（不覆盖历史）"
           else
-            NOTES="iStoreOS 24.10 适配 NanoPi M4B (RK3399 + AP6256) 的自动构建镜像。
-          镜像文件名已加日期前缀（yyyy-mm-dd_原镜像名），每次手动构建增量追加到本 Release，不覆盖历史发布。
-          由 GitHub Actions 基于本仓库补丁与脚本自动编译；仅供技术分享，作者不保证及时修复。
-          使用与问题请参考仓库 README。"
+            NOTES="iStoreOS ${{ inputs.version }} 适配 NanoPi M4B (RK3399 + AP6256) 的自动构建镜像。
+            镜像文件名已加日期前缀（yyyy-mm-dd_原镜像名），每次手动构建增量追加到本 Release，不覆盖历史发布。
+            由 GitHub Actions 基于本仓库补丁与脚本自动编译；仅供技术分享，作者不保证及时修复。
+            使用与问题请参考仓库根目录 README。"
             gh release create "$RELEASE_TAG" --title "$RELEASE_NAME" --notes "$NOTES"
           fi
 
@@ -224,6 +250,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.vars.outputs.release_tag }}
         run: |
           cd patches   # 切到本仓库 checkout，提供 git 上下文供 gh 使用
           shopt -s nullglob

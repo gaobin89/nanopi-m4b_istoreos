@@ -1,0 +1,106 @@
+diff --git a/package/firmware/brcmfmac-firmware-43456/Makefile b/package/firmware/brcmfmac-firmware-43456/Makefile
+new file mode 100644
+index 0000000000..fa5086b70b
+--- /dev/null
++++ b/package/firmware/brcmfmac-firmware-43456/Makefile
+@@ -0,0 +1,100 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=brcmfmac-firmware-43456-sdio
++PKG_VERSION:=2024.08.25
++PKG_RELEASE:=1
++
++PKG_MAINTAINER:=NanoPi M4B iStoreOS adaptation
++
++include $(INCLUDE_DIR)/package.mk
++
++# Ampak AP6256 (BCM4345/9, chiprev 9) SDIO FullMAC firmware blobs.
++#
++# 关键修复（AP 模式固件崩溃）：
++#   早期随 armbian/firmware 提供的 brcmfmac43456-sdio.bin 是 2017 年的
++#   7.45.96.2 (FWID 01-1813af84)，社区广泛确认其在 AP(Hostapd) 模式下"known to
++#   crash"。仅用 brcmfmac.conf 的 feature_disable 只能减少、不能根除崩溃。
++#   故此处把 .bin 换成 Raspberry Pi 官方维护的更新固件
++#   7.84.17.1 (r871554, FWID 01-3d9e1d87, 2020-05-14)，该版本在 43456/AP6256 的
++#   AP 模式下稳定性显著更好，是社区验证过的"彻底修复"手段。
++#   NVRAM(*.txt，板级校准)与 CLM blob 仍取自 armbian（其 clm_blob 与 RPi 逐字节相同），
++#   保留 AP6256 板级参数，避免混用 RPi 板级 nvram 造成校准偏差。
++#
++# brcmfmac 加载：
++#   brcmfmac43456-sdio.bin               firmware (RPi 7.84.17.1)
++#   brcmfmac43456-sdio.clm_blob          CLM (country/locale matrix) blob (armbian)
++#   brcmfmac43456-sdio.txt               NVRAM (AP6256 board defaults, armbian)
++#   brcmfmac43456-sdio.<compatible>.{bin,txt}  board-specific variants (symlinked below)
++ARMBIAN_FW_COMMIT:=f50a2a21bcdb77a562b3976930c5c6b521a1df08
++ARMBIAN_FW_URL:=https://raw.githubusercontent.com/armbian/firmware/$(ARMBIAN_FW_COMMIT)/brcm
++# RPi 官方 brcmfmac43456-sdio.bin（仅 .bin 更新；master 上的 7.84.17.1）。
++# 固件仓库变动受控；下方 HASH 即完整性钉死，若上游改动会 hash 不符而报错，属期望内的
++# "安全失败"，届时据实更新 HASH 即可。
++RPI_FW_URL:=https://raw.githubusercontent.com/RPi-Distro/firmware-nonfree/master/brcm
++
++define Download/brcmfmac43456-sdio-bin
++  URL:=$(RPI_FW_URL)
++  FILE:=brcmfmac43456-sdio.bin
++  URL_FILE:=brcmfmac43456-sdio.bin
++  HASH:=ddf83f2100885b166be52d21c8966db164fdd4e1d816aca2acc67ee9cc28d726
++endef
++$(eval $(call Download,brcmfmac43456-sdio-bin))
++
++define Download/brcmfmac43456-sdio-txt
++  URL:=$(ARMBIAN_FW_URL)
++  FILE:=brcmfmac43456-sdio.txt
++  URL_FILE:=brcmfmac43456-sdio.txt
++  HASH:=66c71eb53b47c49d42386b66735134578640b0946f3f46e44f384fef5aacfd9e
++endef
++$(eval $(call Download,brcmfmac43456-sdio-txt))
++
++define Download/brcmfmac43456-sdio-clm
++  URL:=$(ARMBIAN_FW_URL)
++  FILE:=brcmfmac43456-sdio.clm_blob
++  URL_FILE:=brcmfmac43456-sdio.clm_blob
++  HASH:=2dbd7d22fc9af0eb560ceab45b19646d211bc7b34a1dd00c6bfac5dd6ba25e8a
++endef
++$(eval $(call Download,brcmfmac43456-sdio-clm))
++
++define Package/brcmfmac-firmware-43456-sdio
++  SECTION:=firmware
++  CATEGORY:=Firmware
++  TITLE:=Broadcom BCM43456 SDIO FullMAC firmware (Ampak AP6256)
++  DEPENDS:=+kmod-brcmfmac
++endef
++
++define Package/brcmfmac-firmware-43456-sdio/description
++  brcmfmac firmware for the Broadcom BCM4345/9 (chiprev 9) SDIO FullMAC radio
++  used by the Ampak AP6256 module on the FriendlyARM NanoPi M4B.
++  Provides the .bin firmware, the .clm_blob CLM blob and the AP6256 NVRAM.
++endef
++
++define Build/Compile
++	true
++endef
++
++define Package/brcmfmac-firmware-43456-sdio/install
++	$(INSTALL_DIR) $(1)/lib/firmware/brcm
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.bin \
++		$(1)/lib/firmware/brcm/
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.clm_blob \
++		$(1)/lib/firmware/brcm/
++	$(INSTALL_DATA) \
++		$(DL_DIR)/brcmfmac43456-sdio.txt \
++		$(1)/lib/firmware/brcm/
++	$(LN) \
++		brcmfmac43456-sdio.txt \
++		$(1)/lib/firmware/brcm/brcmfmac43456-sdio.friendlyarm,nanopi-m4b.txt
++	$(LN) \
++		brcmfmac43456-sdio.bin \
++		$(1)/lib/firmware/brcm/brcmfmac43456-sdio.friendlyarm,nanopi-m4b.bin
++	$(LN) \
++		brcmfmac43456-sdio.clm_blob \
++		$(1)/lib/firmware/brcm/brcmfmac43456-sdio.friendlyarm,nanopi-m4b.clm_blob
++endef
++
++$(eval $(call BuildPackage,brcmfmac-firmware-43456-sdio))

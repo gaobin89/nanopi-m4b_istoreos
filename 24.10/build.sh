@@ -2,10 +2,10 @@
 # 在 WSL 中编译 iStoreOS（NanoPi M4B）的安全包装器。
 #
 # 用法（在 istoreos 源码根目录执行）：
-#   bash ~/istoreos/all-patches/build.sh defconfig
-#   bash ~/istoreos/all-patches/build.sh -j$(nproc)
+#   bash ~/istoreos/24.10/build.sh defconfig
+#   bash ~/istoreos/24.10/build.sh -j$(nproc)
 # 或直接透传任意 make 参数：
-#   bash ~/istoreos/all-patches/build.sh menuconfig
+#   bash ~/istoreos/24.10/build.sh menuconfig
 #
 # 作用：清理 PATH（去掉 WSL 挂载的 Windows 路径 /mnt/c/Program Files (x86)/...）。
 # 否则 OpenWrt 会把环境 PATH 重新拼进 uboot 子 make 的 PATH=... 里，
