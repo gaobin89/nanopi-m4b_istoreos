@@ -76,5 +76,19 @@ if [ "$bad" -ne 0 ]; then
   exit 1
 fi
 
+# ---- 强制重建包元数据索引（25.12 CI 失败根因修复）----
+# feeds install -a 内部会先跑一遍 make 元数据扫描（"Collecting target info"），
+# 但此刻 feed 包的 symlink 尚未建立，于是写入的 tmp/.packageinfo 缺少
+# curl / libgcrypt / luci-lua-runtime / luci-theme-argon / attr 等包。
+# 后续 build.sh 的 make 复用这份陈旧索引（不会重新扫描），oldconfig 把这些包
+# 当未知符号丢弃（连种子里显式 =y 的 libgcrypt 也被剥），package/install 阶段
+# opkg 报 "no such package" → Error 9 → world Error 2。
+# 本地 WSL 构建树是持久化的，tmp/.packageinfo 早就在 symlink 建好后生成、是完整的，
+# 所以本地能过、CI 崩——差异在“包树/索引状态”，不在主机 OS（两边都是 ubuntu-24.04）。
+# 修复：在 make 前清掉陈旧索引缓存，此时 symlink 已就位，make 会重新扫描出完整索引。
+echo "==> build.sh 自愈：清除陈旧包索引缓存，强制 make 重建完整 tmp/.packageinfo"
+rm -f tmp/.packageinfo tmp/.packages tmp/.config-package.in tmp/info/.packages 2>/dev/null \
+  && echo "  已删除陈旧 tmp/.packageinfo 等（下次 make 将重新扫描全部已安装 feed 包）" || true
+
 echo "==> 启动 make $*"
 exec make "$@"

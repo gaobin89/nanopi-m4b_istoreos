@@ -171,6 +171,13 @@ jobs:
           # 等“非默认”显式 =y 包（及其依赖链）判为可丢弃并重置为 n，导致镜像缩水、依赖断裂。
           # 故去掉 make defconfig，交给 build.sh 的 make 走 oldconfig，与本地流程完全一致。
 
+      - name: 预下载源码（make download，利用 dl/ 缓存省去编译期网络请求）
+        run: |
+          cd istoreos
+          # 在编译前把已选包的全部源码 tarball 拉到 dl/（命中 actions/cache 的 dl- 缓存，仅补缺失项）。
+          # 这样编译阶段不必再联网下载，避免编译途中因网络抖动/限流导致个别包下载失败而中断。
+          make download -j"$(nproc)" V=s
+
       - name: 配置 ccache（目录指向 istoreos/.ccache，上限 6G）
         run: |
           CCACHE_DIR="$GITHUB_WORKSPACE/istoreos/.ccache"

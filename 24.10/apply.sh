@@ -195,6 +195,22 @@ rm -f feeds.conf
 [ -e .config ] && mv -f .config .config.orig
 cp "$PATCHES/config.r4se" .config
 
+# ---- 传递依赖保底（iStoreOS 24.10 关键修复，与 25.12 同源）----
+# 官方 seed（config.r4se）已显式选中 luci-app-ota / ntfsprogs / istoreos-files，但
+# 构建刻意不跑 defconfig、只跑 oldconfig；而 oldconfig 不会为“已经 =y”的包重新传播
+# 其 +DEPENDS 的 select，于是这些包的运行时依赖被静默丢弃，最终 package/install
+# 阶段 opkg 报 “no such package” 而失败。这里把缺失的传递依赖显式补选
+# （与 apply.sh 其他 =y 项同机制，已验证能存活到最终 .config）。
+#   luci-lua-runtime : 框架（feeds/luci/luci.mk）给所有 luci 应用注入 +luci-lua-runtime
+#   libgcrypt       : ntfsprogs DEPENDS += +libgcrypt
+#   curl            : luci-app-ota 的 LUCI_DEPENDS += +curl
+#   luci-theme-argon: istoreos-files 依赖（24.10 默认主题）
+#   attr            : base-files 硬依赖，避免下一轮 package/install 再崩
+for p in luci-lua-runtime libgcrypt curl luci-theme-argon attr; do
+  sed -i "/^CONFIG_PACKAGE_${p}=/d" .config
+  echo "CONFIG_PACKAGE_${p}=y" >> .config
+done
+
 # ---- 校验 ----
 echo "==> 校验"
 grep -nE "CONFIG_PHY_ROCKCHIP_INNO_HDMI=|CONFIG_DRM_ROCKCHIP=|CONFIG_ROCKCHIP_VOP=" target/linux/rockchip/armv8/config-6.6
