@@ -86,9 +86,14 @@ fi
 # 本地 WSL 构建树是持久化的，tmp/.packageinfo 早就在 symlink 建好后生成、是完整的，
 # 所以本地能过、CI 崩——差异在“包树/索引状态”，不在主机 OS（两边都是 ubuntu-24.04）。
 # 修复：在 make 前清掉陈旧索引缓存，此时 symlink 已就位，make 会重新扫描出完整索引。
-echo "==> build.sh 自愈：清除陈旧包索引缓存，强制 make 重建完整 tmp/.packageinfo"
-rm -f tmp/.packageinfo tmp/.packages tmp/.config-package.in tmp/info/.packages 2>/dev/null \
-  && echo "  已删除陈旧 tmp/.packageinfo 等（下次 make 将重新扫描全部已安装 feed 包）" || true
+# 真凶：feeds install -a 的“收集元数据”早于 symlink 建立，tmp/info/.packages 不完整；
+# make 后续不再收集，只按不完整库生成 tmp/.packageinfo，oldconfig 把包当未知符号丢弃
+# （连种子显式 =y 的 libgcrypt 也被剥）。光删 tmp/.packageinfo 无效（make 不重收集）。
+# 修复：清掉不完整库后重跑 feeds install -a——此时 symlink 已就位，收集得到完整库。
+echo "==> build.sh 自愈：重建完整包元数据（symlink 已就位后重新 feeds install 收集）"
+rm -f tmp/info/.packages tmp/.packageinfo tmp/.packages tmp/.config-package.in 2>/dev/null || true
+./scripts/feeds install -a 2>&1 | tail -n 3
+echo "  已重新收集包元数据（tmp/info/.packages 现在应包含全部已安装 feed 包）"
 
 echo "==> 启动 make $*"
 exec make "$@"
